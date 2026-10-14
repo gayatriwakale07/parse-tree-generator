@@ -1,9 +1,12 @@
+import os
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-app = Flask(__name__)
-CORS(app)
+load_dotenv()
 
+app = Flask(__name__)
+CORS(app, origins=os.getenv("ALLOWED_ORIGIN", "*").split(","))
 
 @app.route("/api/health")
 def health():
@@ -22,4 +25,7 @@ def parse():
 
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(
+        port=int(os.getenv("PORT", 5000)),
+        debug=os.getenv("FLASK_DEBUG", "0") == "1",
+    )
