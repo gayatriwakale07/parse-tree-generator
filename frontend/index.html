@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parse Tree Generator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Parse Tree Generator</h1>
+    <p>Theory of Computation: Context-Free Grammars</p>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Input</h2>
+
+      <label for="examples">Load an example</label>
+      <select id="examples"></select>
+
+      <label for="grammar">Grammar (one rule per line)</label>
+      <textarea id="grammar" rows="6" spellcheck="false">S -> aSb | ab</textarea>
+
+      <label for="string">String to test</label>
+      <input id="string" type="text" value="aabb" spellcheck="false" autocomplete="off">
+
+      <button id="generate" type="button">Generate</button>
+
+      <p class="hint">
+        Use <code>-&gt;</code> for the arrow and <code>|</code> between alternatives.
+        Write <code>eps</code> for the empty string. If a symbol has more than one
+        character (like <code>id</code>), put spaces between the symbols:
+        <code>E -&gt; E + T | T</code>. The first rule's left side is the start symbol.
+        Press Ctrl + Enter to generate.
+      </p>
+    </section>
+
+    <section id="result" class="card hidden" aria-live="polite">
+      <h2>Result</h2>
+      <div id="status"></div>
+      <div id="details" class="hidden">
+        <div id="treePart">
+        <h3>Derivations</h3>
+        <p class="label">Leftmost</p>
+        <pre id="leftmost"></pre>
+        <p class="label">Rightmost</p>
+        <pre id="rightmost"></pre>
+
+        <h3>Parse tree</h3>
+        <p class="legend">
+          <span class="chip var">Variable</span>
+          <span class="chip term">Terminal</span>
+        </p>
+        <div id="trees"></div>
+        </div>
+
+        <h3>Grammar in Chomsky Normal Form</h3>
+        <pre id="cnf"></pre>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
