@@ -1,149 +1,221 @@
-// Address of the Flask backend. Change it here if the backend runs elsewhere.
-const API_BASE = "http://localhost:5000";
-
-const EXAMPLES = [
-  { name: "a^n b^n", grammar: "S -> aSb | ab", string: "aabb" },
-  { name: "Arithmetic expressions", grammar: "E -> E + T | T\nT -> T * F | F\nF -> id", string: "id + id * id" },
-  { name: "Ambiguous expression grammar", grammar: "E -> E + E | E * E | id", string: "id + id * id" },
-  { name: "Palindromes over a, b", grammar: "S -> aSa | bSb | a | b | eps", string: "abba" },
-  { name: "Balanced parentheses", grammar: "S -> ( S ) S | eps", string: "(())()" },
-  { name: "String not in the language", grammar: "S -> aSb | ab", string: "aab" },
-];
-
+// Main page logic: generate / reset, error suggestions, and drawing the parse tree as SVG.
 const $ = (id) => document.getElementById(id);
+const SVG_NS = "http://www.w3.org/2000/svg";
 
-// ---------- setup ----------
-function setupExamples() {
-  const select = $("examples");
-  select.add(new Option("Choose an example...", ""));
-  EXAMPLES.forEach((ex, i) => select.add(new Option(ex.name, String(i))));
-  select.addEventListener("change", () => {
-    if (select.value === "") return;
-    const ex = EXAMPLES[Number(select.value)];
-    $("grammar").value = ex.grammar;
-    $("string").value = ex.string;
-    generate();
-  });
-}
-
-// ---------- calling the backend ----------
-async function generate() {
-  const button = $("generate");
-  button.disabled = true;
-  button.textContent = "Working...";
-  try {
-    const response = await fetch(`${API_BASE}/api/parse`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ grammar: $("grammar").value, string: $("string").value }),
-    });
-    const data = await response.json();
-    render(data);
-  } catch (err) {
-    showStatus([["bad", `Cannot reach the backend at ${API_BASE}. Is it running? (python backend/app.py)`]]);
-  } finally {
-    button.disabled = false;
-    button.textContent = "Generate";
-  }
-}
-
-// ---------- showing the result ----------
-function showStatus(messages) {
-  $("result").classList.remove("hidden");
+function setStatus(text, type) {
   const box = $("status");
-  box.replaceChildren();
-  for (const [kind, text] of messages) {
-    const div = document.createElement("div");
-    div.className = `msg ${kind}`;
-    div.textContent = text;      // textContent keeps user input safe
-    box.appendChild(div);
-  }
-  $("details").classList.add("hidden");
+  box.textContent = text || "";
+  box.className = "status" + (text ? " " + type : "");
 }
 
-function render(data) {
-  if (data.success === false) {
-    showStatus([["bad", data.error || "Something went wrong"]]);
-    return;
-  }
-  if (!data.accepted) {
-    showStatus([["bad", `Rejected: ${data.message}`]]);
-    showCnf(data);
-    return;
-  }
+function renderGrammar(text) {
+  $("grammar-echo").textContent = text || "";
+}
 
-  showStatus([
-    ["ok", "Accepted: the string belongs to the language."],
-    [data.ambiguous ? "warn" : "ok", data.ambiguity_message],
-  ]);
-  $("leftmost").textContent = data.leftmost.join("  ⇒  ");
-  $("rightmost").textContent = data.rightmost.join("  ⇒  ");
-
-  const box = $("trees");
-  box.replaceChildren();
-  data.trees.forEach((tree, i) => {
-    const figure = document.createElement("figure");
-    const caption = document.createElement("figcaption");
-    caption.textContent = data.trees.length > 1
-      ? `Parse tree ${i + 1} of ${data.tree_count}${data.tree_count_capped ? "+" : ""}`
-      : "Parse tree";
-    const holder = document.createElement("div");
-    holder.className = "tree-box";
-    figure.append(caption, holder);
-    box.appendChild(figure);
-    drawTree(holder, tree);
+function renderSteps(steps) {
+  const items = steps.map((s) => {
+    const li = document.createElement("li");
+    li.textContent = s;
+    return li;
   });
-  showCnf(data);
+  $("steps").replaceChildren(...items);
 }
 
-function showCnf(data) {
-  $("cnf").textContent = data.cnf.join("\n");
-  $("treePart").classList.toggle("hidden", !data.accepted);   // nothing to draw when rejected
-  $("details").classList.remove("hidden");
+// ---------- suggestions (shown when the grammar or the input is wrong) ----------
+function hideSuggestions() {
+  const box = $("suggestions");
+  box.hidden = true;
+  box.replaceChildren();
 }
 
-// ---------- drawing a tree with D3 ----------
-function drawTree(container, data) {
-  if (typeof d3 === "undefined") {
-    container.textContent = "D3.js could not be loaded. Check your internet connection.";
+function suggestionBlock(label, code, buttonText, onApply) {
+  const wrap = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "suggest-label";
+  title.textContent = label;
+  const pre = document.createElement("pre");
+  pre.className = "suggest-code";
+  pre.textContent = code || "(empty string)";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn-apply";
+  btn.textContent = buttonText;
+  btn.addEventListener("click", onApply);
+  wrap.append(title, pre, btn);
+  return wrap;
+}
+
+function showSuggestions(data) {
+  const list = (data && data.suggestions) || [];
+  const fixedGrammar = data && data.fixed_grammar;
+  const fixedInput = data && data.fixed_input;
+  if (!list.length && !fixedGrammar && fixedInput == null) { hideSuggestions(); return; }
+
+  const nodes = [];
+  const heading = document.createElement("h3");
+  heading.textContent = "Suggestions";
+  nodes.push(heading);
+
+  if (list.length) {
+    const ul = document.createElement("ul");
+    for (const text of list) {
+      const li = document.createElement("li");
+      li.textContent = text;
+      ul.append(li);
+    }
+    nodes.push(ul);
+  }
+  if (fixedGrammar) {
+    nodes.push(suggestionBlock("Suggested grammar", fixedGrammar, "Use suggested grammar", () => {
+      $("grammar").value = fixedGrammar;
+      hideSuggestions();
+      setStatus("Suggested grammar applied. Click “Generate parse tree” to try it.", "info");
+    }));
+  }
+  if (fixedInput != null) {
+    nodes.push(suggestionBlock("Suggested input", fixedInput, "Use suggested input", () => {
+      $("input-string").value = fixedInput;
+      hideSuggestions();
+      setStatus("Suggested input applied. Click “Generate parse tree” to try it.", "info");
+    }));
+  }
+  const box = $("suggestions");
+  box.replaceChildren(...nodes);
+  box.hidden = false;
+}
+
+// ---------- results ----------
+function clearResult() {
+  const empty = document.createElement("p");
+  empty.className = "tree-empty";
+  empty.textContent = "Your parse tree will appear here.";
+  $("tree").replaceChildren(empty);
+  $("steps").replaceChildren();
+  hideSuggestions();
+}
+
+function svgEl(name, attrs) {
+  const el = document.createElementNS(SVG_NS, name);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  return el;
+}
+
+function renderTree(tree) {
+  const NODE_H = 30, V_GAP = 64, H_GAP = 14, PAD = 20, CHAR_W = 9.6;
+  const nodes = [];
+  let leafX = PAD, maxDepth = 0;
+
+  // leaves get consecutive slots; each parent is centred over its children
+  (function place(n, depth) {
+    n.w = Math.max(34, n.symbol.length * CHAR_W + 22);
+    n.y = PAD + depth * V_GAP + NODE_H / 2;
+    maxDepth = Math.max(maxDepth, depth);
+    if (!n.children.length) {
+      n.x = leafX + n.w / 2;
+      leafX += n.w + H_GAP;
+    } else {
+      n.children.forEach((c) => place(c, depth + 1));
+      n.x = (n.children[0].x + n.children[n.children.length - 1].x) / 2;
+    }
+    nodes.push(n);
+  })(tree, 0);
+
+  const width = Math.ceil(leafX - H_GAP + PAD);
+  const height = PAD * 2 + maxDepth * V_GAP + NODE_H;
+  const svg = svgEl("svg", {
+    class: "tree-svg", width, height, viewBox: `0 0 ${width} ${height}`,
+    role: "img", "aria-label": "Parse tree",
+  });
+
+  for (const n of nodes) {
+    for (const c of n.children) {
+      svg.append(svgEl("line", {
+        class: "edge", x1: n.x, y1: n.y + NODE_H / 2, x2: c.x, y2: c.y - NODE_H / 2,
+      }));
+    }
+  }
+  const cls = { nonterminal: "node-nt", terminal: "node-t", epsilon: "node-eps" };
+  for (const n of nodes) {
+    const g = svgEl("g", { class: cls[n.type] });
+    g.append(svgEl("rect", { x: n.x - n.w / 2, y: n.y - NODE_H / 2, width: n.w, height: NODE_H, rx: 8 }));
+    const t = svgEl("text", { x: n.x, y: n.y });
+    t.textContent = n.symbol;
+    g.append(t);
+    svg.append(g);
+  }
+  $("tree").replaceChildren(svg);
+}
+
+// also used by history.js when a saved record is opened
+function renderParseResult(tree, steps) {
+  renderTree(tree);
+  renderSteps(steps || []);
+  hideSuggestions();
+}
+
+// ---------- actions ----------
+async function generate() {
+  const grammar = $("grammar").value;
+
+  if (!grammar.trim()) {
+    clearResult();
+    renderGrammar("");
+    setStatus("Please enter a grammar first.", "error");
+    showSuggestions({
+      suggestions: [
+        "Write one rule per line, for example:  E -> T E'",
+        "Separate the symbols with spaces and use | between alternatives.",
+        "Use ε (or the word eps) for the empty string.",
+      ],
+    });
+    $("grammar").focus();
     return;
   }
-  const root = d3.hierarchy(data, (d) => d.children);
-  const maxLabel = d3.max(root.descendants(), (d) => d.data.symbol.length);
-  const dx = Math.max(56, maxLabel * 10 + 34);
-  const dy = 70;
-  d3.tree().nodeSize([dx, dy])(root);
 
-  let x0 = Infinity, x1 = -Infinity;
-  root.each((d) => { x0 = Math.min(x0, d.x); x1 = Math.max(x1, d.x); });
-  const width = x1 - x0 + dx * 2;
-  const height = root.height * dy + 70;
-
-  const svg = d3.select(container).append("svg")
-    .attr("width", width)
-    .attr("height", height)
-    .attr("viewBox", [x0 - dx, -35, width, height]);
-
-  svg.append("g").selectAll("path").data(root.links()).join("path")
-    .attr("class", "link")
-    .attr("d", d3.linkVertical().x((d) => d.x).y((d) => d.y));
-
-  const node = svg.append("g").selectAll("g").data(root.descendants()).join("g")
-    .attr("class", (d) => `node ${d.data.children ? "var" : "term"}`)
-    .attr("transform", (d) => `translate(${d.x},${d.y})`);
-
-  node.append("rect")
-    .attr("rx", 8)
-    .attr("height", 30).attr("y", -15)
-    .attr("width", (d) => Math.max(34, d.data.symbol.length * 10 + 18))
-    .attr("x", (d) => -Math.max(34, d.data.symbol.length * 10 + 18) / 2);
-  node.append("text").text((d) => d.data.symbol);
+  const btn = $("generate-btn");
+  btn.disabled = true;
+  setStatus("Generating…", "info");
+  try {
+    const data = await apiFetch("/parse", {
+      method: "POST",
+      body: JSON.stringify({
+        grammar,
+        input: $("input-string").value,
+        start: $("start-symbol").value,
+      }),
+    });
+    renderGrammar(grammar);
+    renderParseResult(data.tree, data.steps);
+    setStatus("Parse tree generated successfully", "ok");
+  } catch (err) {
+    if (err.status === 401) { window.location.href = "login.html"; return; }
+    clearResult();
+    renderGrammar(grammar);
+    setStatus(err.message, "error");
+    showSuggestions(err.data);
+  } finally {
+    btn.disabled = false;
+    History.refresh().catch(() => {});
+  }
 }
 
-// ---------- events ----------
-$("generate").addEventListener("click", generate);
-document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey && e.key === "Enter") generate();
-});
-setupExamples();
-generate();
+function reset() {
+  $("grammar").value = "";
+  $("input-string").value = "";
+  $("start-symbol").value = "";
+  renderGrammar("");
+  clearResult();
+  setStatus("", "");
+  $("grammar").focus();
+  apiFetch("/event", { method: "POST", body: JSON.stringify({ action: "reset" }) }).catch(() => {});
+}
+
+// ---- start: the form is empty, nothing is pre-filled ----
+renderGrammar("");
+clearResult();
+$("generate-btn").addEventListener("click", generate);
+$("reset-btn").addEventListener("click", reset);
+
+Auth.requireLogin()
+  .then(() => History.refresh())
+  .catch(() => { /* redirected to login.html */ });

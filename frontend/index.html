@@ -4,64 +4,88 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Parse Tree Generator</title>
+  <link rel="stylesheet" href="auth.css">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header>
-    <h1>Parse Tree Generator</h1>
-    <p>Theory of Computation: Context-Free Grammars</p>
-  </header>
+<body class="app">
+  <div class="wrap">
 
-  <main>
-    <section class="card">
-      <h2>Input</h2>
+    <header class="app-header">
+      <div>
+        <h1>Parse Tree Generator</h1>
+        <p>Enter a grammar and a string to generate the parse tree</p>
+      </div>
+      <div class="header-right">
+        <span>Context-free grammar, LL(1) recursive descent</span>
+        <div id="user-bar"></div>
+      </div>
+    </header>
 
-      <label for="examples">Load an example</label>
-      <select id="examples"></select>
+    <section class="card controls">
+      <div class="field">
+        <label for="grammar">Grammar</label>
+        <textarea id="grammar" rows="5" spellcheck="false"
+                  placeholder="One rule per line, for example:&#10;E  -&gt; T E'&#10;E' -&gt; + T E' | ε&#10;T  -&gt; id"></textarea>
+      </div>
 
-      <label for="grammar">Grammar (one rule per line)</label>
-      <textarea id="grammar" rows="6" spellcheck="false">S -> aSb | ab</textarea>
-
-      <label for="string">String to test</label>
-      <input id="string" type="text" value="aabb" spellcheck="false" autocomplete="off">
-
-      <button id="generate" type="button">Generate</button>
-
-      <p class="hint">
-        Use <code>-&gt;</code> for the arrow and <code>|</code> between alternatives.
-        Write <code>eps</code> for the empty string. If a symbol has more than one
-        character (like <code>id</code>), put spaces between the symbols:
-        <code>E -&gt; E + T | T</code>. The first rule's left side is the start symbol.
-        Press Ctrl + Enter to generate.
-      </p>
-    </section>
-
-    <section id="result" class="card hidden" aria-live="polite">
-      <h2>Result</h2>
-      <div id="status"></div>
-      <div id="details" class="hidden">
-        <div id="treePart">
-        <h3>Derivations</h3>
-        <p class="label">Leftmost</p>
-        <pre id="leftmost"></pre>
-        <p class="label">Rightmost</p>
-        <pre id="rightmost"></pre>
-
-        <h3>Parse tree</h3>
-        <p class="legend">
-          <span class="chip var">Variable</span>
-          <span class="chip term">Terminal</span>
-        </p>
-        <div id="trees"></div>
+      <div>
+        <div class="field">
+          <label for="input-string">Input string</label>
+          <input id="input-string" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="Symbols separated by spaces">
         </div>
+        <div class="field">
+          <label for="start-symbol">Start symbol</label>
+          <input id="start-symbol" type="text" spellcheck="false" autocomplete="off"
+                 placeholder="Empty = first rule">
+        </div>
+      </div>
 
-        <h3>Grammar in Chomsky Normal Form</h3>
-        <pre id="cnf"></pre>
+      <div class="actions">
+        <button id="generate-btn" class="btn" type="button">Generate parse tree</button>
+        <button id="reset-btn" class="btn-secondary" type="button">Reset</button>
       </div>
     </section>
-  </main>
 
-  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+    <div class="main">
+      <section class="card tree-card">
+        <h2>Parse tree</h2>
+        <div id="tree" class="tree-scroll"></div>
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <div id="suggestions" class="suggestions" hidden></div>
+      </section>
+
+      <aside class="side">
+        <section class="card">
+          <h2>Grammar</h2>
+          <pre id="grammar-echo" class="grammar-echo"></pre>
+        </section>
+
+        <section class="card">
+          <h2>Parsing steps</h2>
+          <ol id="steps" class="steps"></ol>
+        </section>
+
+        <section class="card">
+          <h2>Legend</h2>
+          <ul class="legend">
+            <li><span class="swatch sw-nt"></span>Non-terminal (E, T, F)</li>
+            <li><span class="swatch sw-t"></span>Terminal (id, +, *)</li>
+            <li><span class="swatch sw-eps"></span>ε (empty string)</li>
+          </ul>
+        </section>
+
+        <section class="card">
+          <h2>My history</h2>
+          <ul id="history-list" class="history-list"></ul>
+        </section>
+      </aside>
+    </div>
+
+  </div>
+
+  <script src="auth.js"></script>
+  <script src="history.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
